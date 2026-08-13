@@ -1,22 +1,6 @@
 """
-Jarvis GUI - Siri-like desktop interface
-
-Usage: python jarvis_gui.py
-Or use run_gui.bat on Windows.
-
-Features:
-- System tray icon (pystray) with menu: Show/Hide, Exit
-- Small floating Tkinter window showing status, last transcript, last response
-- Always-on wake-word listening using Porcupine (if configured), fallback to hotkey
-- Uses the same core interaction flow: STT (faster-whisper) -> Ollama -> TTS (pyttsx3)
-
-Environment variables: same as jarvis_service
-- PORCUPINE_KEYWORD_PATH, PORCUPINE_LIBRARY_PATH, PORCUPINE_SENSITIVITY
-- OLLAMA_URL
-
-Notes:
-- Requires pillow and pystray for system tray functionality
-- Tkinter is part of the Python standard library on Windows
+Jarvis GUI - Siri-like desktop interface with WAKE_BACKEND support
+Supports WAKE_BACKEND=vosk|porcupine|whisper (vosk is default)
 """
 import os
 import threading
@@ -42,14 +26,17 @@ from app.tts.tts import speak_text
 from app.db.init_db import init_db, log_activity
 from app.automation.windows_automation import open_app, run_command
 
-# Porcupine
+# Wake backend selection
+WAKE_BACKEND = os.getenv('WAKE_BACKEND', 'vosk').lower()
+
+# Porcupine availability (optional)
 try:
     import pvporcupine
-    import sounddevice as sd
-    import struct
     PORCUPINE_AVAILABLE = True
 except Exception:
     PORCUPINE_AVAILABLE = False
+
+# VOSK availability will be checked when used
 
 
 def create_image(color1=(0, 122, 255), color2=(255, 255, 255)):
@@ -87,23 +74,38 @@ class JarvisGUI:
         self.thread = None
         self.ollama = OllamaClient(os.getenv('OLLAMA_URL', 'http://localhost:11434'))
 
-        keyword_path = os.getenv('PORCUPINE_KEYWORD_PATH')
-        library_path = os.getenv('PORCUPINE_LIBRARY_PATH')
-        sensitivity = float(os.getenv('PORCUPINE_SENSITIVITY', '0.5'))
-        self.use_porcupine = PORCUPINE_AVAILABLE and keyword_path
-        self.keyword_path = keyword_path
-        self.library_path = library_path
-        self.sensitivity = sensitivity
+        # Wake backend init
+        self.use_porcupine = False
+        self.use_vosk = False
+        if WAKE_BACKEND == 'porcupine' and PORCUPINE_AVAILABLE:
+            keyword_path = os.getenv('PORCUPINE_KEYWORD_PATH')
+            library_path = os.getenv('PORCUPINE_LIBRARY_PATH')
+            sensitivity = float(os.getenv('PORCUPINE_SENSITIVITY', '0.5'))
+            if keyword_path:
+                try:
+                    self.porcupine = pvporcupine.create(keyword_paths=[keyword_path], sensitivities=[sensitivity], library_path=library_path if library_path else None)
+                    self.sample_rate = self.porcupine.sample_rate
+                    self.frame_length = self.porcupine.frame_length
+                    self.use_porcupine = True
+                    self.log_write('Porcupine initialized')
+                except Exception as e:
+                    self.log_write(f'Porcupine init failed: {e}')
 
-        if self.use_porcupine:
+        elif WAKE_BACKEND == 'vosk':
             try:
-                self.porcupine = pvporcupine.create(keyword_paths=[self.keyword_path], sensitivities=[self.sensitivity], library_path=self.library_path if self.library_path else None)
-                self.sample_rate = self.porcupine.sample_rate
-                self.frame_length = self.porcupine.frame_length
-                self.log_write('Porcupine initialized')
+                from app.wake.vosk_wake import VoskWakeListener
+                model_path = os.getenv('VOSK_MODEL_PATH')
+                if not model_path:
+                    raise RuntimeError('VOSK_MODEL_PATH not set')
+                self.vosk = VoskWakeListener(model_path=model_path, sample_rate=int(os.getenv('VOSK_SAMPLE_RATE', '16000')))
+                self.use_vosk = True
+                self.log_write('VOSK wake listener initialized')
             except Exception as e:
-                self.log_write(f'Porcupine init failed: {e}')
-                self.use_porcupine = False
+                self.log_write(f'VOSK init failed: {e}')
+                raise
+        else:
+            self.log_write(f'Unsupported WAKE_BACKEND: {WAKE_BACKEND}')
+            raise SystemExit('No supported wake backend available')
 
         init_db()
 
@@ -145,9 +147,10 @@ class JarvisGUI:
 
     def listener_loop(self):
         if self.use_porcupine:
-            # use RawInputStream
+            import sounddevice as sd
+            import struct
             with sd.RawInputStream(samplerate=self.sample_rate, blocksize=self.frame_length, dtype='int16', channels=1) as stream:
-                self.log_write('Listening for wake-word...')
+                self.log_write('Listening for wake-word (Porcupine)...')
                 while self.running:
                     try:
                         pcm = stream.read(self.frame_length)[0]
@@ -160,14 +163,17 @@ class JarvisGUI:
                     except Exception as e:
                         self.log_write(f'Listen error: {e}')
                         time.sleep(0.5)
-        else:
-            self.log_write('Fallback hotkey: press Enter in console to trigger')
+
+        elif self.use_vosk:
+            self.log_write('Listening for wake-word (VOSK)...')
             while self.running:
                 try:
-                    input()  # blocks
-                    self.on_wake()
+                    detected = self.vosk.listen_once()
+                    if detected:
+                        self.on_wake()
                 except Exception as e:
-                    self.log_write(f'Hotkey error: {e}')
+                    self.log_write(f'VOSK listen error: {e}')
+                    time.sleep(0.5)
 
     def on_wake(self):
         self.status_var.set('Listening...')

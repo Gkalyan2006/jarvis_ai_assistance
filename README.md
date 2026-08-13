@@ -1,27 +1,44 @@
-# Updated README: Jarvis Desktop (no website)
+# Jarvis Desktop (Phase One) - Desktop-only
 
-This branch implements a Siri-like local desktop assistant for Windows 11.
-It provides an always-on wake-word listener and a small desktop GUI (no website).
+This branch implements a Siri-like local desktop assistant for Windows 11. It is
+fully desktop-focused and does not include a web dashboard or web API.
 
-Run the GUI assistant:
-1. Clone & checkout phase-one-mvp branch
-2. Create virtualenv and install dependencies
+What's included
+- jarvis_gui.py — Desktop GUI with system tray support (VOSK wake-word by default)
+- jarvis_service.py — Console service (also uses selected wake backend)
+- app/wake/vosk_wake.py — VOSK wake-word backend
+- app/stt/whisper_stt.py — faster-whisper microphone recording & transcription
+- app/llm/ollama_client.py — Ollama client wrapper (HTTP + CLI fallback)
+- app/tts/tts.py — pyttsx3 TTS wrapper
+- app/automation/windows_automation.py — open apps / run commands helpers
+- app/db/init_db.py — SQLite activity logging
+
+Removed
+- FastAPI web dashboard and API are removed from this branch to provide a
+  purely desktop/hands-free assistant. If you want the web UI back, I can
+  reintroduce it in a separate branch or on request.
+
+Quick start (Windows)
+1. Clone & checkout phase-one-mvp
+   git clone https://github.com/Gkalyan2006/jarvis_ai_assistance.git
+   cd jarvis_ai_assistance
+   git checkout phase-one-mvp
+
+2. Create & activate venv (PowerShell):
    python -m venv .venv
-   .venv\Scripts\activate
+   . .\.venv\Scripts\Activate.ps1
+
+3. Install dependencies:
    pip install -r requirements.txt
-   pip install -r requirements-porcupine.txt  # if using Porcupine
-   pip install pystray pillow
+   pip install vosk sounddevice
 
-3. Configure .env (copy .env.example and set values)
-   - OLLAMA_URL (e.g., http://localhost:11434)
-   - API_TOKEN
-   - PORCUPINE_KEYWORD_PATH and PORCUPINE_LIBRARY_PATH (if using wake word)
+4. Download & set up VOSK model (see app/wake/README_VOSK.md)
+   - set VOSK_MODEL_PATH in .env
+   - set WAKE_BACKEND=vosk
 
-4. Run:
-   python jarvis_gui.py
-   or double-click run_gui.bat
+5. Configure .env and run the GUI:
+   - copy .env.example to .env and set OLLAMA_URL, API_TOKEN, VOSK_MODEL_PATH
+   - python jarvis_gui.py
 
-Notes:
-- The GUI shows status, transcripts, and assistant replies. A system tray icon is shown if pystray is available.
-- The assistant uses Porcupine for wake-word detection if you provide a .ppn keyword file. Otherwise, use the fallback hotkey mode (press Enter in the console window).
-- No web dashboard is required to run the assistant. The FastAPI files remain in the repo for optional mobile control but are not necessary for the desktop GUI.
+If you want the web API restored or a separate minimal HTTP control endpoint,
+let me know and I will add it as an optional module in another branch.
