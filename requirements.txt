@@ -11,3 +11,4 @@ sqlalchemy
 aiosqlite
 pystray
 pillow
+vosk

@@ -1,19 +1,6 @@
 """
 Jarvis Service - Always-on wake-word listener and assistant loop
-Runs on Windows 11, listens for the wake word (Porcupine) and then records,
-transcribes (faster-whisper), queries local Ollama, and speaks response.
-
-Run: python jarvis_service.py
-
-Environment Variables (.env):
-- OLLAMA_URL (e.g., http://localhost:11434)
-- API_TOKEN (for mobile API if enabled)
-- PORCUPINE_LIBRARY_PATH (optional) - path to Porcupine shared lib if needed
-- PORCUPINE_KEYWORD_PATH (required for wake-word) - path to .ppn keyword file
-- PORCUPINE_SENSITIVITY (optional, float 0-1)
-
-If Porcupine is not available or no keyword path is set, the service falls back
-to a push-to-talk fallback: press Enter to start recording.
+Supports WAKE_BACKEND=vosk|porcupine|whisper (vosk default)
 """
 import os
 import time
@@ -29,44 +16,49 @@ from app.tts.tts import speak_text
 from app.db.init_db import init_db, log_activity
 from app.automation.windows_automation import open_app, run_command
 
-# Optional Porcupine wake-word listener
+WAKE_BACKEND = os.getenv('WAKE_BACKEND', 'vosk').lower()
+
+# Porcupine optional
 try:
     import pvporcupine
-    import struct
-    import sounddevice as sd
     PORCUPINE_AVAILABLE = True
 except Exception:
     PORCUPINE_AVAILABLE = False
 
+use_porcupine = False
+use_vosk = False
 
-class PorcupineWakeListener:
-    def __init__(self, keyword_path: str, library_path: str = None, sensitivity: float = 0.5):
-        if not PORCUPINE_AVAILABLE:
-            raise RuntimeError("pvporcupine is not installed or could not be imported")
-        kwargs = {}
-        if library_path:
-            kwargs['library_path'] = library_path
-        self.porcupine = pvporcupine.create(keyword_paths=[keyword_path], sensitivities=[sensitivity], **kwargs)
-        self.sample_rate = self.porcupine.sample_rate
-        self.frame_length = self.porcupine.frame_length
+if WAKE_BACKEND == 'porcupine' and PORCUPINE_AVAILABLE:
+    keyword_path = os.getenv('PORCUPINE_KEYWORD_PATH')
+    library_path = os.getenv('PORCUPINE_LIBRARY_PATH')
+    sensitivity = float(os.getenv('PORCUPINE_SENSITIVITY', '0.5'))
+    if keyword_path:
+        try:
+            wake_porcupine = pvporcupine.create(keyword_paths=[keyword_path], sensitivities=[sensitivity], library_path=library_path if library_path else None)
+            sample_rate = wake_porcupine.sample_rate
+            frame_length = wake_porcupine.frame_length
+            use_porcupine = True
+            print('Porcupine initialized')
+        except Exception as e:
+            print('Failed to init Porcupine:', e)
+            use_porcupine = False
 
-    def listen_once(self):
-        # blocking listen until wake word triggers
-        print("Listening for wake-word...")
-        with sd.RawInputStream(samplerate=self.sample_rate, blocksize=self.frame_length, dtype='int16', channels=1) as stream:
-            while True:
-                pcm = stream.read(self.frame_length)[0]
-                if not pcm:
-                    continue
-                pcm = struct.unpack_from("h" * (len(pcm) // 2), pcm)
-                result = self.porcupine.process(pcm)
-                if result >= 0:
-                    print("Wake word detected")
-                    return True
+elif WAKE_BACKEND == 'vosk':
+    try:
+        from app.wake.vosk_wake import VoskWakeListener
+        model_path = os.getenv('VOSK_MODEL_PATH')
+        if not model_path:
+            raise RuntimeError('VOSK_MODEL_PATH not set')
+        wake_vosk = VoskWakeListener(model_path=model_path, sample_rate=int(os.getenv('VOSK_SAMPLE_RATE', '16000')))
+        use_vosk = True
+        print('VOSK initialized')
+    except Exception as e:
+        print('VOSK init failed:', e)
+        raise
 
-
-def fallback_hotkey_wait():
-    input("Press Enter to speak (fallback hotkey)...")
+else:
+    print('Unsupported WAKE_BACKEND or backend not available:', WAKE_BACKEND)
+    raise SystemExit(1)
 
 
 def handle_interaction(ollama: OllamaClient):
@@ -81,11 +73,9 @@ def handle_interaction(ollama: OllamaClient):
         speak_text(resp)
         # log
         try:
-            # asyncio not required; init_db uses sqlite sync functions
             import asyncio
             asyncio.run(log_activity(action="interaction", details=f"user: {transcript} | assistant: {resp}"))
         except Exception:
-            # fallback synchronous
             log_activity(action="interaction", details=f"user: {transcript} | assistant: {resp}")
         # simple post-processing: if assistant suggests to open app in a special format: OPEN: path
         if resp.strip().upper().startswith('OPEN:'):
@@ -109,35 +99,28 @@ def main():
     init_db()
     ollama = OllamaClient(os.getenv('OLLAMA_URL', 'http://localhost:11434'))
 
-    keyword_path = os.getenv('PORCUPINE_KEYWORD_PATH')
-    library_path = os.getenv('PORCUPINE_LIBRARY_PATH')
-    sensitivity = float(os.getenv('PORCUPINE_SENSITIVITY', '0.5'))
-
-    use_porcupine = PORCUPINE_AVAILABLE and keyword_path
-    if use_porcupine:
-        try:
-            wake = PorcupineWakeListener(keyword_path=keyword_path, library_path=library_path, sensitivity=sensitivity)
-            print("Porcupine wake listener initialized")
-        except Exception as e:
-            print("Failed to initialize Porcupine:", e)
-            use_porcupine = False
-
-    print("Jarvis is ready. Say the wake word or use fallback hotkey.")
-
     try:
         while True:
             try:
                 if use_porcupine:
-                    wake.listen_once()
+                    import sounddevice as sd, struct
+                    with sd.RawInputStream(samplerate=sample_rate, blocksize=frame_length, dtype='int16', channels=1) as stream:
+                        pcm = stream.read(frame_length)[0]
+                        pcm = struct.unpack_from('h' * (len(pcm) // 2), pcm)
+                        result = wake_porcupine.process(pcm)
+                        if result >= 0:
+                            t = threading.Thread(target=handle_interaction, args=(ollama,))
+                            t.start()
+                            t.join()
+                elif use_vosk:
+                    detected = wake_vosk.listen_once()
+                    if detected:
+                        t = threading.Thread(target=handle_interaction, args=(ollama,))
+                        t.start()
+                        t.join()
                 else:
-                    fallback_hotkey_wait()
-                # handle in separate thread to avoid blocking wake listener (if you want continuous)
-                t = threading.Thread(target=handle_interaction, args=(ollama,))
-                t.start()
-                # optionally join if you want to block until finished
-                t.join()
-                # short cooldown
-                time.sleep(0.5)
+                    # No hotkey fallback: block until a supported backend triggers
+                    time.sleep(0.1)
             except KeyboardInterrupt:
                 print("Shutting down Jarvis (keyboard interrupt)")
                 break
