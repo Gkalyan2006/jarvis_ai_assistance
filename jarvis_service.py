@@ -64,9 +64,12 @@ else:
 
 def handle_interaction(ollama: OllamaClient):
     try:
-        # record ~6 seconds for user utterance
-        print("Recording user utterance...")
-        transcript = transcribe_from_microphone(duration=6)
+        # VAD-based recording for user utterance
+        print("Recording user utterance (VAD)...")
+        transcript = transcribe_from_microphone(duration=int(os.getenv('MAX_RECORD_SECONDS', '6')))
+        if not transcript or not transcript.strip():
+            print("No speech detected. Listening again...")
+            return
         print(f"User said: {transcript}")
         # call LLM
         resp = ollama.chat(transcript)
