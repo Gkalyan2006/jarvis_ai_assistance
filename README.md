@@ -1,44 +1,33 @@
-# Jarvis Desktop (Phase One) - Desktop-only
+# Jarvis Desktop (Phase One) - Desktop-only (minimal install)
 
-This branch implements a Siri-like local desktop assistant for Windows 11. It is
-fully desktop-focused and does not include a web dashboard or web API.
+This branch provides a desktop-only, hands-free Jarvis assistant for Windows. It defaults to VOSK for wake-word detection and aims to be lightweight to speed up installs.
 
-What's included
-- jarvis_gui.py — Desktop GUI with system tray support (VOSK wake-word by default)
-- jarvis_service.py — Console service (also uses selected wake backend)
-- app/wake/vosk_wake.py — VOSK wake-word backend
-- app/stt/whisper_stt.py — faster-whisper microphone recording & transcription
-- app/llm/ollama_client.py — Ollama client wrapper (HTTP + CLI fallback)
-- app/tts/tts.py — pyttsx3 TTS wrapper
-- app/automation/windows_automation.py — open apps / run commands helpers
-- app/db/init_db.py — SQLite activity logging
-
-Removed
-- FastAPI web dashboard and API are removed from this branch to provide a
-  purely desktop/hands-free assistant. If you want the web UI back, I can
-  reintroduce it in a separate branch or on request.
-
-Quick start (Windows)
-1. Clone & checkout phase-one-mvp
-   git clone https://github.com/Gkalyan2006/jarvis_ai_assistance.git
-   cd jarvis_ai_assistance
-   git checkout phase-one-mvp
-
-2. Create & activate venv (PowerShell):
+Minimal install (fast)
+1. Create & activate venv (PowerShell):
    python -m venv .venv
    . .\.venv\Scripts\Activate.ps1
 
-3. Install dependencies:
-   pip install -r requirements.txt
-   pip install vosk sounddevice
+2. Install minimal dependencies (fast):
+   pip install -r requirements-minimal.txt
 
-4. Download & set up VOSK model (see app/wake/README_VOSK.md)
-   - set VOSK_MODEL_PATH in .env
-   - set WAKE_BACKEND=vosk
+3. Download & set up a VOSK model (small English model recommended):
+   - https://alphacephei.com/vosk/models (e.g. vosk-model-small-en-us-0.15)
+   - Unzip to a local folder, e.g. C:\models\vosk-model-small-en-us-0.15
 
-5. Configure .env and run the GUI:
-   - copy .env.example to .env and set OLLAMA_URL, API_TOKEN, VOSK_MODEL_PATH
-   - python jarvis_gui.py
+4. Configure .env (copy .env.example -> .env) and set:
+   WAKE_BACKEND=vosk
+   VOSK_MODEL_PATH=C:\models\vosk-model-small-en-us-0.15
+   VOSK_SAMPLE_RATE=16000
+   OLLAMA_URL=http://localhost:11434
+   API_TOKEN=<your_token>
 
-If you want the web API restored or a separate minimal HTTP control endpoint,
-let me know and I will add it as an optional module in another branch.
+5. Run the GUI:
+   python jarvis_gui.py
+
+Optional heavier features
+- If you want Whisper-based transcription, GPU acceleration, or async DB enhancements, install optional packages:
+  pip install -r requirements-optional.txt
+
+Notes
+- The minimal install avoids heavy ML wheels and large model downloads. VOSK is used for wake-word and can also be used for command transcription if desired.
+- If you want me to switch the full transcription pipeline from faster-whisper to VOSK (so you never need faster-whisper), say "switch stt to vosk" and I'll update the code and push.

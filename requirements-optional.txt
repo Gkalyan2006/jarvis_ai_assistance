@@ -1,0 +1,7 @@
+# Optional / heavier packages
+# Install only if you need Whisper-based transcription, large ML libraries, or async DB adapters
+faster-whisper
+scipy
+numpy
+aiosqlite
+sqlalchemy
