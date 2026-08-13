@@ -8,6 +8,7 @@ import sys
 import threading
 from dotenv import load_dotenv
 
+# Load environment variables from .env (if present) early
 load_dotenv()
 
 from app.stt.whisper_stt import transcribe_from_microphone
