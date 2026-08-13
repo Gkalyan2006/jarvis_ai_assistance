@@ -1,0 +1,17 @@
+# Byte-compiled / virtualenv
+__pycache__/
+env/
+.venv/
+
+# Python
+*.py[cod]
+*.pyo
+*.pyd
+
+# Distribution / packaging
+build/
+dist/
+
+# IDEs
+.vscode/
+.idea/
