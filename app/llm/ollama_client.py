@@ -34,7 +34,8 @@ class OllamaClient:
             headers['Authorization'] = f"Bearer {token}"
 
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            # Increase timeout to allow larger models (e.g., qwen3:8b) more time to respond
+            resp = requests.post(url, json=payload, headers=headers, timeout=120)
             resp.raise_for_status()
             data = resp.json()
 
