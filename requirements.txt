@@ -1,14 +1,13 @@
-fastapi
-uvicorn[standard]
+# Project dependencies (desktop-only)
+
 python-dotenv
 pyttsx3
 faster-whisper
 sounddevice
 scipy
 requests
-aiofiles
-sqlalchemy
 aiosqlite
+sqlalchemy
 pystray
 pillow
 vosk
