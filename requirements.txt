@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+pyttsx3
+faster-whisper
+sounddevice
+scipy
+requests
+aiofiles
+sqlalchemy
+aiosqlite

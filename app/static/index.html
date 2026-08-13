@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Jarvis AI Assistance - Dashboard</title>
+    <style>
+      body{font-family: Arial, sans-serif; margin: 24px}
+      h1{color:#222}
+      .note{color:#666}
+    </style>
+  </head>
+  <body>
+    <h1>Jarvis AI Assistance — Phase One</h1>
+    <p class="note">Simple demo dashboard. Use the API endpoints to interact programmatically.</p>
+    <ul>
+      <li>Health: <a href="/api/health">/api/health</a></li>
+      <li>Transcribe (POST): /api/voice/transcribe — records ~5s and returns transcript</li>
+      <li>Ask (POST): /api/ask — JSON {"prompt":"..."}</li>
+      <li>Automation (POST): /api/automation/run — JSON {"cmd":"dir"} or {"app":"C:/Program Files/"}, header x-api-token</li>
+    </ul>
+  </body>
+</html>
