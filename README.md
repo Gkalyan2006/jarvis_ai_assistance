@@ -1,19 +1,27 @@
-# Jarvis AI Assistance - Phase One (MVP)
+# Updated README: Jarvis Desktop (no website)
 
-This repository contains the Phase One scaffold for "Jarvis AI Assistance" — a Windows 11-targeted local assistant MVP.
+This branch implements a Siri-like local desktop assistant for Windows 11.
+It provides an always-on wake-word listener and a small desktop GUI (no website).
 
-What's included:
-- FastAPI backend to coordinate STT, LLM (Ollama), TTS, automation, and logging
-- Whisper (faster-whisper) based STT wrapper (microphone record demo)
-- Ollama client wrapper (HTTP/Subprocess fallback)
-- pyttsx3 TTS wrapper
-- Windows automation helper (open apps, run shell commands, create files/folders)
-- SQLite-based memory + activity logging
-- Simple HTML dashboard
+Run the GUI assistant:
+1. Clone & checkout phase-one-mvp branch
+2. Create virtualenv and install dependencies
+   python -m venv .venv
+   .venv\Scripts\activate
+   pip install -r requirements.txt
+   pip install -r requirements-porcupine.txt  # if using Porcupine
+   pip install pystray pillow
 
-Prerequisites:
-- Python 3.10+
-- Ollama installed and Qwen3:8B (or another model) available locally
-- On Windows: sounddevice + drivers for microphone
+3. Configure .env (copy .env.example and set values)
+   - OLLAMA_URL (e.g., http://localhost:11434)
+   - API_TOKEN
+   - PORCUPINE_KEYWORD_PATH and PORCUPINE_LIBRARY_PATH (if using wake word)
 
-See README.md for setup & run instructions.
+4. Run:
+   python jarvis_gui.py
+   or double-click run_gui.bat
+
+Notes:
+- The GUI shows status, transcripts, and assistant replies. A system tray icon is shown if pystray is available.
+- The assistant uses Porcupine for wake-word detection if you provide a .ppn keyword file. Otherwise, use the fallback hotkey mode (press Enter in the console window).
+- No web dashboard is required to run the assistant. The FastAPI files remain in the repo for optional mobile control but are not necessary for the desktop GUI.

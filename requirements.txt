@@ -9,3 +9,5 @@ requests
 aiofiles
 sqlalchemy
 aiosqlite
+pystray
+pillow
