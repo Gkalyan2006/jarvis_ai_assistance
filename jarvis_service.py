@@ -16,6 +16,7 @@ from app.llm.ollama_client import OllamaClient
 from app.tts.tts import speak_text
 from app.db.init_db import init_db, log_activity
 from app.automation.windows_automation import open_app, run_command
+from app.security.owner_guard import verify_owner, verify_passphrase
 
 WAKE_BACKEND = os.getenv('WAKE_BACKEND', 'vosk').lower()
 
@@ -64,8 +65,9 @@ else:
 
 def handle_interaction(ollama: OllamaClient):
     try:
-        # VAD-based recording for user utterance
-        print("Recording user utterance (VAD)...")
+        # Fixed-duration recording for now (phase one reliability)
+        print("Recording user utterance...")
+        # record ~MAX_RECORD_SECONDS seconds for user utterance
         transcript = transcribe_from_microphone(duration=int(os.getenv('MAX_RECORD_SECONDS', '6')))
         if not transcript or not transcript.strip():
             print("No speech detected. Listening again...")
@@ -113,12 +115,56 @@ def main():
                         pcm = struct.unpack_from('h' * (len(pcm) // 2), pcm)
                         result = wake_porcupine.process(pcm)
                         if result >= 0:
+                            print('[VOSK] Wake word detected')
+                            # Security: verify owner voice
+                            try:
+                                print('[SECURITY] Verifying owner voice...')
+                                if not verify_owner():
+                                    print('[SECURITY] Access denied: unknown speaker')
+                                    speak_text('Access denied')
+                                    continue
+                                # Ask for passphrase
+                                speak_text('Please say your passphrase')
+                                phrase = transcribe_from_microphone(duration=3)
+                                if not verify_passphrase(phrase):
+                                    print('[SECURITY] Wrong passphrase')
+                                    speak_text('Wrong passphrase')
+                                    continue
+                                print('[SECURITY] Owner verified')
+                                speak_text('Welcome back Kalyan')
+                            except Exception as e:
+                                print('[SECURITY] Owner verification failed:', e)
+                                speak_text('Access denied')
+                                continue
+
                             t = threading.Thread(target=handle_interaction, args=(ollama,))
                             t.start()
                             t.join()
                 elif use_vosk:
                     detected = wake_vosk.listen_once()
                     if detected:
+                        print('[VOSK] Wake word detected')
+                        # Security: verify owner voice
+                        try:
+                            print('[SECURITY] Verifying owner voice...')
+                            if not verify_owner():
+                                print('[SECURITY] Access denied: unknown speaker')
+                                speak_text('Access denied')
+                                continue
+                            # Ask for passphrase
+                            speak_text('Please say your passphrase')
+                            phrase = transcribe_from_microphone(duration=3)
+                            if not verify_passphrase(phrase):
+                                print('[SECURITY] Wrong passphrase')
+                                speak_text('Wrong passphrase')
+                                continue
+                            print('[SECURITY] Owner verified')
+                            speak_text('Welcome back Kalyan')
+                        except Exception as e:
+                            print('[SECURITY] Owner verification failed:', e)
+                            speak_text('Access denied')
+                            continue
+
                         t = threading.Thread(target=handle_interaction, args=(ollama,))
                         t.start()
                         t.join()

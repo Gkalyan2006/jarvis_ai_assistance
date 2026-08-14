@@ -11,3 +11,6 @@ sqlalchemy
 pystray
 pillow
 vosk
+speechbrain
+torch
+torchaudio
