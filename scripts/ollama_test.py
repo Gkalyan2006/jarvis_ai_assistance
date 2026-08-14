@@ -24,7 +24,7 @@ if API_TOKEN:
 
 print(f"Testing Ollama connectivity to: {url} (model={OLLAMA_MODEL})")
 try:
-    r = requests.post(url, json=payload, headers=headers, timeout=15)
+    r = requests.post(url, json=payload, headers=headers, timeout=120)
     r.raise_for_status()
     data = r.json()
     print("HTTP 200 OK — response received")
