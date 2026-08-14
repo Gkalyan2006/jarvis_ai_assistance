@@ -28,7 +28,7 @@ def _record_chunk(seconds: float, rate: int):
     return frames
 
 
-def record_vad_to_wav(max_seconds: float = 6.0, silence_duration: float = 0.8, rate: int = 16000, vad_threshold: float = 2.0):
+def record_vad_to_wav(max_seconds: float = 6.0, silence_duration: float = 0.8, rate: int = 16000, vad_threshold: float = 1.2):
     """Record audio using a simple energy-based VAD.
 
     - Samples ambient noise for a short period to compute a threshold.
@@ -42,8 +42,10 @@ def record_vad_to_wav(max_seconds: float = 6.0, silence_duration: float = 0.8, r
     print(f"VAD recording: sampling ambient for {ambient_sec}s to set threshold")
     ambient = _record_chunk(ambient_sec, rate)
     ambient_rms = _rms(ambient)
-    threshold = max(1e-4, ambient_rms * vad_threshold)
-    print(f"Ambient RMS={ambient_rms:.6f}, vad threshold={threshold:.6f}")
+    # Use a modest floor to avoid a threshold of exactly zero on silent devices
+    min_floor = 1e-6
+    threshold = max(min_floor, ambient_rms * vad_threshold)
+    print(f"Ambient RMS={ambient_rms:.6f}, vad threshold={threshold:.6f} (multiplier={vad_threshold})")
 
     started = False
     silence_time = 0.0
@@ -56,6 +58,9 @@ def record_vad_to_wav(max_seconds: float = 6.0, silence_duration: float = 0.8, r
         chunk = _record_chunk(chunk_sec, rate)
         total_time = time.time() - start_time
         rms = _rms(chunk)
+
+        # Print live RMS so we can observe microphone level
+        print(f"Chunk RMS={rms:.6f} (threshold={threshold:.6f})")
 
         if not started:
             if rms >= threshold:
@@ -70,7 +75,6 @@ def record_vad_to_wav(max_seconds: float = 6.0, silence_duration: float = 0.8, r
             recorded_chunks.append(chunk)
             if rms < threshold:
                 silence_time += chunk_sec
-                # print progress optionally
             else:
                 silence_time = 0.0
 
@@ -107,7 +111,7 @@ def transcribe_from_microphone(duration=6):
     rate = int(os.getenv('VOSK_SAMPLE_RATE', os.getenv('TRANSCRIBE_SAMPLE_RATE', '16000')))
     max_seconds = float(os.getenv('MAX_RECORD_SECONDS', str(duration)))
     silence_duration = float(os.getenv('SILENCE_DURATION', '0.8'))
-    vad_threshold = float(os.getenv('VAD_THRESHOLD', '2.0'))
+    vad_threshold = float(os.getenv('VAD_THRESHOLD', '1.2'))
 
     wavpath = record_vad_to_wav(max_seconds=max_seconds, silence_duration=silence_duration, rate=rate, vad_threshold=vad_threshold)
     if not wavpath:
